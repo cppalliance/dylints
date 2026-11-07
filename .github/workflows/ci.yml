@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Every step builds on the nightly in rust-toolchain.toml, which rustup
+  # installs with its listed components on first use. The UI tests link
+  # through dylint-link (.cargo/config.toml). It runs on 24.04 because the
+  # prebuilt dylint-link binary needs glibc 2.38 or later.
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same release as the `dylint_linting` the library depends on.
+      - name: Install dylint-link
+        uses: taiki-e/install-action@3f74d7c16a4242f1c95561e98edc25d36adb4375 # v2
+        with:
+          tool: dylint-link@6.3.2
+
+      - name: Install the nightly
+        run: rustup toolchain install
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        env:
+          CARGO_BUILD_WARNINGS: deny
+        run: cargo clippy --all-targets --locked
+
+      - name: UI tests
+        run: cargo test --locked
